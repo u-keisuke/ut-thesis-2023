@@ -1,4 +1,10 @@
 .python-version
+*.csv
+*.log
+*.pkl
+.DS_Store
+.vscode
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
