@@ -4,18 +4,11 @@ import pickle
 import time
 from copy import deepcopy
 
-import numpy as np
 from tqdm import tqdm
 
-from cfr import (
-    compute_exploitability,
-    get_exploitability,
-    update_node_values,
-    update_pi,
-    update_strategy,
-)
+from cfr import get_exploitability, update_node_values, update_pi, update_strategy
 from poker import KuhnPoker, Node
-from utils import get_logger
+from utils import get_csv_saver, get_logger
 
 
 def get_initial_strategy_profile(node: Node, num_players=None, strategy_profile=None):
@@ -67,7 +60,14 @@ def train(num_iter, log_schedule, args):
             # store average_strategy_profile
             average_strategy_profile_dict[t] = deepcopy(average_strategy_profile)
 
-            logger.debug(f"{t}, {exploitability}, {utility_br0_ev1}, {utility_ev0_br1}")
+            # time
+            time_now = time.time()
+            time_elapsed_ms = (time_now - TIME_START) * 1000
+
+            logger.debug(f"{t}, {time_elapsed_ms}, {exploitability}")
+            log_exploitability(
+                [t, time_elapsed_ms, exploitability, utility_br0_ev1, utility_ev0_br1]
+            )
 
     # save average_strategy_profile
     with open(os.path.join(FOLDER_SAVE, "average_strategy_profile.pkl"), "wb") as f:
@@ -89,8 +89,22 @@ if __name__ == "__main__":
     parser.add_argument("--os", action="store_true")  # outcome sampling
     args = parser.parse_args()
 
-    STR_TIME_NOW = time.strftime("%Y%m%d-%H%M%S")
-    FOLDER_SAVE = f"../logs/{STR_TIME_NOW}"
+    if args.cs:
+        type_sampling = "cs"
+    elif args.os:
+        type_sampling = "os"
+    else:
+        type_sampling = "vanilla"
+
+    TIME_START = time.time()
+    STR_TIME_START = time.strftime(
+        f"%Y%m%d-%H%M%S-{type_sampling}", time.localtime(TIME_START)
+    )
+    FOLDER_SAVE = f"../logs/{STR_TIME_START}"
+
     logger = get_logger(__name__, os.path.join(FOLDER_SAVE, f"{__name__}.log"))
+    log_exploitability = get_csv_saver(os.path.join(FOLDER_SAVE, f"exploitability.csv"))
+
+    logger.debug(args)
 
     main(args)

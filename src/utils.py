@@ -34,3 +34,16 @@ def add_list_to_dict(target_dict, key, value):
         target_dict[key].append(value)
     else:
         target_dict[key] = [value]
+
+
+def get_csv_saver(path):
+    # make folder for path
+    dir_path = os.path.dirname(path)
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
+    def csv_saver(row):
+        with open(path, "a") as f:
+            f.write(",".join(map(str, row)) + "\n")
+
+    return csv_saver
