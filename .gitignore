@@ -1,4 +1,9 @@
 .python-version
+.DS_Store
+.vscode
+*.csv
+*.yaml
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
