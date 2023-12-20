@@ -24,8 +24,8 @@ class Node:
         self.cfr = (
             {}
         )  # counter-factual regret of not taking action a at history h(not information I)
-        self.pi_i_sum = 0  # denominator of average strategy
-        self.pi_sigma_sum = {}  # numerator of average strategy
+        self.pi_i_sum = 0  # denominator of average strategy (sumは全てのiterationについて)
+        self.pi_sigma_sum = {}  # numerator of average strategy (sumは全てのiterationについて)
         self.num_updates = 0
 
     def expand_child_node(

@@ -56,31 +56,37 @@ def update_node_values(root_note, strategy_profile, args):
 
 
 def update_node_values_vanilla(node: Node, strategy_profile: dict):
-    node_eu = 0  # ノードに到達した後得られる期待利得
     node.num_updates += 1
+
     if node.terminal:
         return node.eu
+
+    node_eu = 0  # ノードに到達した後得られる期待利得
     node.pi_i_sum += node.pi_i
+
     for action, child_node in node.children.items():
         p = strategy_profile[node.player][node.information][action]
         node.pi_sigma_sum[action] += node.pi_i * p
         node_eu += p * update_node_values_vanilla(child_node, strategy_profile)
     node.eu = node_eu
     node.cv = node.pi_mi * node_eu
+
     for action, child_node in node.children.items():
-        cfr = (
-            node.pi_mi * child_node.eu - node.cv
-            if node.player == 0
-            else (-1) * (node.pi_mi * child_node.eu - node.cv)
-        )
+        if node.player == 0:
+            cfr = node.pi_mi * child_node.eu - node.cv
+        else:
+            cfr = (-1) * (node.pi_mi * child_node.eu - node.cv)
         node.cfr[action] += cfr
+
     return node_eu
 
 
 def update_node_values_chance_sampling(node: Node, strategy_profile: dict):
     node.num_updates += 1
+
     if node.terminal:
         return node.eu
+
     if node.player == -1:  # chance player
         # sample child note
         child_node = np.random.choice(list(node.children.values()))
@@ -88,6 +94,7 @@ def update_node_values_chance_sampling(node: Node, strategy_profile: dict):
 
     node_eu = 0  # ノードに到達した後得られる期待利得
     node.pi_i_sum += node.pi_i
+
     for action, child_node in node.children.items():
         p = strategy_profile[node.player][node.information][action]
         node.pi_sigma_sum[action] += node.pi_i * p
@@ -96,12 +103,12 @@ def update_node_values_chance_sampling(node: Node, strategy_profile: dict):
     node.cv = node.pi_mi * node_eu
 
     for action, child_node in node.children.items():
-        cfr = (
-            node.pi_mi * child_node.eu - node.cv
-            if node.player == 0
-            else (-1) * (node.pi_mi * child_node.eu - node.cv)
-        )
+        if node.player == 0:
+            cfr = node.pi_mi * child_node.eu - node.cv
+        else:
+            cfr = (-1) * (node.pi_mi * child_node.eu - node.cv)
         node.cfr[action] += cfr
+
     return node_eu
 
 
@@ -110,8 +117,10 @@ epsilon = 0.1
 
 def update_node_values_outcome_sampling(node: Node, strategy_profile: dict, s: float):
     node.num_updates += 1
+
     if node.terminal:
         return node.eu / s, 1
+
     if node.player == -1:  # chance player
         # sample child note
         child_node = np.random.choice(list(node.children.values()))
@@ -145,12 +154,12 @@ def update_node_values_outcome_sampling(node: Node, strategy_profile: dict, s: f
     node.eu = node_eu
     node.cv = node.pi_mi * node_eu
 
-    cfr = (
-        node.pi_mi * child_node.eu - node.cv
-        if node.player == 0
-        else (-1) * (node.pi_mi * child_node.eu - node.cv)
-    )
-    node.cfr[action] += cfr
+    for action, child_node in node.children.items():
+        if node.player == 0:
+            cfr = node.pi_mi * child_node.eu - node.cv
+        else:
+            cfr = (-1) * (node.pi_mi * child_node.eu - node.cv)
+        node.cfr[action] += cfr
 
     return node_eu
 
@@ -179,9 +188,11 @@ def update_strategy(
     for player, information_policy in strategy_profile.items():
         if player == -1:
             continue
+
         for information, strategy in information_policy.items():
             cfr = {}
             for action in strategy.keys():
+                # 同一ノードにおけるcfrの和を計算
                 cfr_in_info = 0
                 average_strategy_denominator = 0
                 average_strategy_numerator = 0
@@ -203,73 +214,3 @@ def update_strategy(
                 else:
                     strategy[action] = 1 / len(strategy)
     return
-
-
-def compute_exploitability(
-    node, information_sets, average_strategy_profile, opponent_player
-):
-    """
-    exploitability when opponent player chooses best response for current strategy
-    """
-    if node.terminal:
-        return node.eu
-    if node.player == opponent_player:  # choose exploitable strategy
-        best_response_value = None
-        best_weighted_expected_utility = (
-            -float("inf") if opponent_player == 0 else float("inf")
-        )  # current best value
-        for action, _ in node.children.items():
-            current_weighted_expected_utility = (
-                0  # current value of sum of reach_p * expected_utility
-            )
-            current_node_expected_utility = 0
-            for same_info_node in information_sets[node.player][node.information]:
-                expected_utility = compute_exploitability(
-                    same_info_node.children[action],
-                    information_sets,
-                    average_strategy_profile,
-                    opponent_player,
-                )
-                if node == same_info_node:
-                    current_node_expected_utility = expected_utility
-                current_weighted_expected_utility += (
-                    same_info_node.true_pi_mi * expected_utility
-                )
-            if opponent_player == 0:
-                if best_weighted_expected_utility < current_weighted_expected_utility:
-                    best_weighted_expected_utility = current_weighted_expected_utility
-                    best_response_value = current_node_expected_utility
-            else:
-                if best_weighted_expected_utility > current_weighted_expected_utility:
-                    best_weighted_expected_utility = current_weighted_expected_utility
-                    best_response_value = current_node_expected_utility
-        return best_response_value
-
-    else:  # use current strategy
-        expected_utility = 0
-        for action, child_node in node.children.items():
-            p = average_strategy_profile[node.player][node.information][action]
-            expected_utility += p * compute_exploitability(
-                child_node, information_sets, average_strategy_profile, opponent_player
-            )
-    return expected_utility
-
-
-def get_exploitability(game, average_strategy_profile):
-    best_reponse_0 = compute_exploitability(
-        game.root,
-        game.information_sets,
-        average_strategy_profile,
-        opponent_player=0,
-    )
-    best_reponse_1 = compute_exploitability(
-        game.root,
-        game.information_sets,
-        average_strategy_profile,
-        opponent_player=1,
-    )
-
-    exploitability = best_reponse_0 + (-1) * best_reponse_1
-    exploitability /= game.num_players
-
-    return exploitability, [best_reponse_0, best_reponse_1]

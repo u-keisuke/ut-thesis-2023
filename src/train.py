@@ -6,27 +6,15 @@ from copy import deepcopy
 
 from tqdm import tqdm
 
-from cfr import get_exploitability, update_node_values, update_pi, update_strategy
-from poker import KuhnPoker, Node
+from cfr import (
+    get_initial_strategy_profile,
+    update_node_values,
+    update_pi,
+    update_strategy,
+)
+from exploitability import get_exploitability
+from poker import KuhnPoker
 from utils import get_csv_saver, get_logger
-
-
-def get_initial_strategy_profile(node: Node, num_players=None, strategy_profile=None):
-    if node.terminal:
-        return strategy_profile
-    if strategy_profile is None:
-        strategy_profile = {
-            player: {} for player in range(-1, num_players)
-        }  # chance nodeのために+1する
-    if node.information not in strategy_profile[node.player]:
-        strategy_profile[node.player][node.information] = {
-            action: 1 / len(node.children) for action in node.children
-        }
-    for child in node.children.values():
-        strategy_profile = get_initial_strategy_profile(
-            child, strategy_profile=strategy_profile
-        )
-    return strategy_profile
 
 
 def train(num_iter, log_schedule, args):
