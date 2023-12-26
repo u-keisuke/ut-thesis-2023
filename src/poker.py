@@ -18,12 +18,13 @@ class Node:
         self.pi = 0
         self.pi_mi = 0  # pi_-i
         self.pi_i = 0  # pi_i
-        self.true_pi_mi = 0  # pi_-i following current average strategy profile
+        self.true_pi_mi = 0  # used only when computing exploitability
         self.eu = eu
         self.cv = 0
         self.cfr = (
             {}
         )  # counter-factual regret of not taking action a at history h(not information I)
+
         self.pi_i_sum = 0  # denominator of average strategy (sumは全てのiterationについて)
         self.pi_sigma_sum = {}  # numerator of average strategy (sumは全てのiterationについて)
         self.num_updates = 0
@@ -152,6 +153,72 @@ class KuhnPoker:
                                 node,
                             )
                             node = stack.pop()
+        return root
+
+    def _compute_utility(self, action, player, hand_0, hand_1):
+        card_0, card_1 = hand_0[0], hand_1[0]
+        is_win = card_0 > card_1
+        if action == "fold":
+            utility = 1 if player == 1 else -1
+        elif action == "check":
+            utility = 1 if is_win else -1
+        elif action == "call":
+            utility = 2 if is_win else -2
+        else:
+            utility = 0
+        return utility
+
+
+class LeducPoker:
+    def __init__(self):
+        self.num_players = 2
+        self.deck = [i for i in range(6)]  # J1, J2, Q1, Q2, K1, K2
+        self.information_sets = {player: {} for player in range(-1, self.num_players)}
+        self.root = self._build_game_tree()
+        self._game_pattern = [
+            ("call", "call"),
+            ("call", "raise", "fold"),
+            ("call", "raise", "call"),
+            ("call", "raise", "raise", "fold"),
+            ("call", "raise", "raise", "call"),
+            ("raise", "fold"),
+            ("raise", "call"),
+            ("raise", "raise", "fold"),
+            ("raise", "raise", "call"),
+        ]
+
+    def _build_game_tree(self):
+        stack = deque()
+        next_player = -1
+        root = Node(next_player, False)
+        add_list_to_dict(self.information_sets[next_player], root.information, root)
+        for hand_0 in combinations(self.deck, 1):
+            for hand_1 in combinations(self.deck, 1):
+                if set(hand_0) & set(hand_1):
+                    continue
+                private_cards = [hand_0, hand_1, ()]  # p1, p2, chance player
+                next_player = 0
+                node = root.expand_child_node(
+                    str(*hand_0) + "," + str(*hand_1),
+                    next_player,
+                    False,
+                    private_cards=private_cards,
+                )
+                add_list_to_dict(
+                    self.information_sets[next_player], node.information, node
+                )
+                stack.append(node)
+
+                next_player = 0
+                for round_1 in self._game_pattern:
+                    for action in round_1:
+                        next_player += 1
+                        node = node.expand_child_node(action, next_player, False)
+                        add_list_to_dict(
+                            self.information_sets[next_player], node.information, node
+                        )
+                        stack.append(node)
+
         return root
 
     def _compute_utility(self, action, player, hand_0, hand_1):

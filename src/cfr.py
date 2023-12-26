@@ -1,8 +1,20 @@
+import os
+import time
 from copy import copy
 
 import numpy as np
 
 from poker import Node
+from utils import get_logger
+
+type_sampling = "os"
+TIME_START = time.time()
+STR_TIME_START = time.strftime(
+    f"%Y%m%d-%H%M%S-{type_sampling}", time.localtime(TIME_START)
+)
+FOLDER_SAVE = f"../logs/{STR_TIME_START}"
+
+logger = get_logger(__name__, os.path.join(FOLDER_SAVE, f"{__name__}.log"))
 
 
 def update_pi(
@@ -50,12 +62,18 @@ def update_node_values(root_note, strategy_profile, args):
     if args.cs:
         update_node_values_chance_sampling(root_note, strategy_profile)
     elif args.os:
-        update_node_values_outcome_sampling(root_note, strategy_profile)
+        update_node_values_outcome_sampling(root_note, strategy_profile, 1)
     else:
         update_node_values_vanilla(root_note, strategy_profile)
 
 
 def update_node_values_vanilla(node: Node, strategy_profile: dict):
+    """node.[eu, cv, cfr, pi_i_sum, pi_sigma_sum]が更新される
+    eu: ノードに到達した後得られる期待利得
+    cv: ノードに到達した後得られる期待利得のcounter-factual value
+    cfr: counter-factual regret
+
+    """
     node.num_updates += 1
 
     if node.terminal:
@@ -65,15 +83,16 @@ def update_node_values_vanilla(node: Node, strategy_profile: dict):
     node.pi_i_sum += node.pi_i
 
     for action, child_node in node.children.items():
-        p = strategy_profile[node.player][node.information][action]
+        p = strategy_profile[node.player][node.information][action]  # p = sigma^t(I,a)
         node.pi_sigma_sum[action] += node.pi_i * p
         node_eu += p * update_node_values_vanilla(child_node, strategy_profile)
-    node.eu = node_eu
-    node.cv = node.pi_mi * node_eu
+    node.eu = node_eu  # node_eu = v_sigma
 
+    node.cv = node.pi_mi * node_eu
     for action, child_node in node.children.items():
         if node.player == 0:
-            cfr = node.pi_mi * child_node.eu - node.cv
+            cfr = node.pi_mi * child_node.eu - node.cv  # child_node.eu = v_(I->a)[a]
+            # or chr = node.pi_mi * (child_node.eu - node_eu)
         else:
             cfr = (-1) * (node.pi_mi * child_node.eu - node.cv)
         node.cfr[action] += cfr
@@ -100,8 +119,8 @@ def update_node_values_chance_sampling(node: Node, strategy_profile: dict):
         node.pi_sigma_sum[action] += node.pi_i * p
         node_eu += p * update_node_values_chance_sampling(child_node, strategy_profile)
     node.eu = node_eu
-    node.cv = node.pi_mi * node_eu
 
+    node.cv = node.pi_mi * node_eu
     for action, child_node in node.children.items():
         if node.player == 0:
             cfr = node.pi_mi * child_node.eu - node.cv
@@ -126,42 +145,52 @@ def update_node_values_outcome_sampling(node: Node, strategy_profile: dict, s: f
         child_node = np.random.choice(list(node.children.values()))
         return update_node_values_outcome_sampling(child_node, strategy_profile, s)
 
-    node_eu = 0  # ノードに到達した後得られる期待利得
     node.pi_i_sum += node.pi_i
+
+    strategy_node = strategy_profile[node.player][node.information]
 
     # sample action (from epsion*uniform + (1-epsilon)*strategy_profile)
     sampling_distribution = np.array(
         [epsilon / len(node.children) for _ in range(len(node.children))]
     )
+    logger.debug(f"{sampling_distribution=}")
     for i, (action, child_node) in enumerate(node.children.items()):
-        sampling_distribution[i] += (1 - epsilon) * strategy_profile[node.player][
-            node.information
-        ][action]
-    action = np.random.choice(
-        list(node.children.keys()),
-        p=list(strategy_profile[node.player][node.information].values()),
-    )
-    child_node = node.children[action]
+        sampling_distribution[i] += (1 - epsilon) * strategy_node[action]
+    logger.debug(f"{sampling_distribution=}, {strategy_node=}")
 
-    p = strategy_profile[node.player][node.information][action]
-    node.pi_sigma_sum[action] += node.pi_i * p
-    node_eu += p * update_node_values_outcome_sampling(
-        child_node,
+    i_sampled = np.random.choice(
+        list(range(len(node.children))),
+        p=sampling_distribution,
+    )
+    action_sampled = list(node.children.keys())[i_sampled]
+    child_node_sampled = node.children[action_sampled]
+
+    p = strategy_profile[node.player][node.information][action_sampled]
+    node.pi_sigma_sum[action_sampled] += node.pi_i * p
+
+    node_eu, pi_tail = update_node_values_outcome_sampling(
+        child_node_sampled,
         strategy_profile,
-        s * strategy_profile[node.player][node.information][action],
+        s * sampling_distribution[i_sampled],
     )
-
     node.eu = node_eu
+
     node.cv = node.pi_mi * node_eu
-
     for action, child_node in node.children.items():
-        if node.player == 0:
-            cfr = node.pi_mi * child_node.eu - node.cv
+        W = child_node.eu * node.pi_mi
+        if action == action_sampled:
+            cfr_sampled = W * ((pi_tail / child_node.pi) - (pi_tail / node.pi))
         else:
-            cfr = (-1) * (node.pi_mi * child_node.eu - node.cv)
-        node.cfr[action] += cfr
+            cfr_sampled = (-1) * W * (pi_tail / node.pi)
 
-    return node_eu
+        if node.player == 0:
+            cfr_sampled = cfr_sampled
+        else:
+            cfr_sampled = (-1) * cfr_sampled
+
+        node.cfr[action] += cfr_sampled
+
+    return node_eu, pi_tail * p
 
 
 def get_initial_strategy_profile(node: Node, num_players=None, strategy_profile=None):
@@ -190,27 +219,33 @@ def update_strategy(
             continue
 
         for information, strategy in information_policy.items():
+            # strategy profileの更新
             cfr = {}
             for action in strategy.keys():
                 # 同一ノードにおけるcfrの和を計算
                 cfr_in_info = 0
-                average_strategy_denominator = 0
-                average_strategy_numerator = 0
                 for same_info_node in information_sets[player][information]:
                     cfr_in_info += same_info_node.cfr[action]
-                    average_strategy_denominator += same_info_node.pi_i_sum
-                    average_strategy_numerator += same_info_node.pi_sigma_sum[action]
                 cfr[action] = max(cfr_in_info, 0)
-
-                if not average_strategy_denominator == 0:  ###
-                    average_strategy_profile[player][information][action] = (
-                        average_strategy_numerator / average_strategy_denominator
-                    )
-
+            # MarcLanctot, eq. 2.18
             cfr_sum = sum([cfr_values for cfr_values in cfr.values()])
             for action in strategy.keys():
                 if cfr_sum > 0:
                     strategy[action] = cfr[action] / cfr_sum
                 else:
                     strategy[action] = 1 / len(strategy)
+
+            # --------------------------------------------------
+            # average strategy profileの更新
+            for action in strategy.keys():
+                average_strategy_denominator = 0
+                average_strategy_numerator = 0
+                for same_info_node in information_sets[player][information]:
+                    average_strategy_denominator += same_info_node.pi_i_sum
+                    average_strategy_numerator += same_info_node.pi_sigma_sum[action]
+                if not average_strategy_denominator == 0:
+                    average_strategy_profile[player][information][action] = (
+                        average_strategy_numerator / average_strategy_denominator
+                    )
+
     return
