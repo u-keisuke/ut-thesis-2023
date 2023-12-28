@@ -13,15 +13,27 @@ from cfr import (
     update_strategy,
 )
 from exploitability import get_exploitability
-from poker import KuhnPoker
+from poker import KuhnPoker, LeducPoker
 from utils import get_csv_saver, get_logger
 
 
 def train(num_iter, log_schedule, args):
-    game = KuhnPoker()
+    if args.game == "kuhn":
+        game = KuhnPoker()
+    elif args.game == "leduc":
+        game = LeducPoker()
+
+    # save game tree
+    with open(os.path.join(FOLDER_SAVE, "game_tree_initial.pkl"), "wb") as f:
+        pickle.dump(game, f)
+
     strategy_profile = get_initial_strategy_profile(game.root, game.num_players)
     average_strategy_profile = deepcopy(strategy_profile)
     average_strategy_profile_dict = {}
+
+    # save initial strategy profile
+    with open(os.path.join(FOLDER_SAVE, "strategy_profile_initial.pkl"), "wb") as f:
+        pickle.dump(strategy_profile, f)
 
     for t in tqdm(range(num_iter)):
         update_pi(
@@ -33,14 +45,14 @@ def train(num_iter, log_schedule, args):
             [1.0 for _ in range(game.num_players + 1)],
         )
 
-        update_node_values(game.root, strategy_profile, args)
+        update_node_values(game.root, strategy_profile, args.sampling)
 
         update_strategy(
             strategy_profile, average_strategy_profile, game.information_sets
         )
 
         # log & save
-        if t % log_schedule(t) == 0:
+        if log_schedule(t):
             # exploitability
             exploitability, tmp = get_exploitability(game, average_strategy_profile)
             utility_br0_ev1, utility_ev0_br1 = tmp
@@ -66,29 +78,25 @@ def train(num_iter, log_schedule, args):
 
 def main(args):
     num_updates = int(1e4)
-    average_strategy_profile = train(
-        num_updates, lambda x: (10 ** (len(str(x)) - 1)), args
-    )
+    log_schedule = lambda t: t % (10 ** (len(str(t)) - 1)) == 0
+    # log_schedule = lambda t: (t == 1000) or (t == 10000)
+    average_strategy_profile = train(num_updates, log_schedule, args)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cs", action="store_true")  # chance sampling
-    parser.add_argument("--os", action="store_true")  # outcome sampling
+    parser.add_argument(
+        "--sampling",
+        "-s",
+        choices=["vanilla", "cs", "os"],
+        default="vanilla",
+    )
+    parser.add_argument("--game", "-g", choices=["kuhn", "leduc"], default="kuhn")
     args = parser.parse_args()
 
-    if args.cs:
-        type_sampling = "cs"
-    elif args.os:
-        type_sampling = "os"
-    else:
-        type_sampling = "vanilla"
-
     TIME_START = time.time()
-    STR_TIME_START = time.strftime(
-        f"%Y%m%d-%H%M%S-{type_sampling}", time.localtime(TIME_START)
-    )
-    FOLDER_SAVE = f"../logs/{STR_TIME_START}"
+    STR_TIME_START = time.strftime("%Y%m%d-%H%M%S", time.localtime(TIME_START))
+    FOLDER_SAVE = f"../logs/{STR_TIME_START}-{args.game}-{args.sampling}"
 
     logger = get_logger(__name__, os.path.join(FOLDER_SAVE, f"{__name__}.log"))
     log_exploitability = get_csv_saver(os.path.join(FOLDER_SAVE, f"exploitability.csv"))

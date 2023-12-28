@@ -7,15 +7,6 @@ import numpy as np
 from poker import Node
 from utils import get_logger
 
-type_sampling = "os"
-TIME_START = time.time()
-STR_TIME_START = time.strftime(
-    f"%Y%m%d-%H%M%S-{type_sampling}", time.localtime(TIME_START)
-)
-FOLDER_SAVE = f"../logs/{STR_TIME_START}"
-
-logger = get_logger(__name__, os.path.join(FOLDER_SAVE, f"{__name__}.log"))
-
 
 def update_pi(
     node: Node,
@@ -58,12 +49,12 @@ def update_pi(
         )
 
 
-def update_node_values(root_note, strategy_profile, args):
-    if args.cs:
+def update_node_values(root_note, strategy_profile, sampling_type):
+    if sampling_type == "cs":
         update_node_values_chance_sampling(root_note, strategy_profile)
-    elif args.os:
+    elif sampling_type == "os":
         update_node_values_outcome_sampling(root_note, strategy_profile, 1)
-    else:
+    elif sampling_type == "vanilla":
         update_node_values_vanilla(root_note, strategy_profile)
 
 
@@ -92,7 +83,7 @@ def update_node_values_vanilla(node: Node, strategy_profile: dict):
     for action, child_node in node.children.items():
         if node.player == 0:
             cfr = node.pi_mi * child_node.eu - node.cv  # child_node.eu = v_(I->a)[a]
-            # or chr = node.pi_mi * (child_node.eu - node_eu)
+            # or cfr = node.pi_mi * (child_node.eu - node_eu)
         else:
             cfr = (-1) * (node.pi_mi * child_node.eu - node.cv)
         node.cfr[action] += cfr
@@ -107,7 +98,7 @@ def update_node_values_chance_sampling(node: Node, strategy_profile: dict):
         return node.eu
 
     if node.player == -1:  # chance player
-        # sample child note
+        # sample child node
         child_node = np.random.choice(list(node.children.values()))
         return update_node_values_chance_sampling(child_node, strategy_profile)
 
@@ -153,10 +144,8 @@ def update_node_values_outcome_sampling(node: Node, strategy_profile: dict, s: f
     sampling_distribution = np.array(
         [epsilon / len(node.children) for _ in range(len(node.children))]
     )
-    logger.debug(f"{sampling_distribution=}")
     for i, (action, child_node) in enumerate(node.children.items()):
         sampling_distribution[i] += (1 - epsilon) * strategy_node[action]
-    logger.debug(f"{sampling_distribution=}, {strategy_node=}")
 
     i_sampled = np.random.choice(
         list(range(len(node.children))),
