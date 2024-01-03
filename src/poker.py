@@ -44,9 +44,9 @@ class Node:
         next_node.private_cards = (
             self.private_cards if private_cards is None else private_cards
         )
-        next_node.history = self.history + [
-            action
-        ]  # if self.player != -1 else self.history
+        next_node.history = (
+            self.history + [action] if private_cards is None else self.history
+        )  # 最初のカードを配る時のみhistoryをそのままにする(leducpokerにおける共有カードを配るのはactionとして認識される)
         next_node.information = (
             next_node.private_cards[next_player],
             tuple(next_node.history),
@@ -209,7 +209,12 @@ class LeducPoker:
                         | (set(hand_1) & set(hand_chance))
                     ):
                         continue
-                    private_cards = [hand_0, hand_1, ()]  # p1, p2, chance player
+                    private_cards = [
+                        hand_0,
+                        hand_1,
+                        (hand_0, hand_1),
+                    ]  # p1, p2, chance player
+                    # 共有カードで何を配れるかを決めるために，プレイヤーのprivate cardを保存しておく必要がある
 
                     next_player = 0
                     node = root.expand_child_node(

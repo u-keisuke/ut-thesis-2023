@@ -57,17 +57,26 @@ def train(num_iter, log_schedule, args):
 
         # log & save
         if log_schedule(t):
-            exploitability, tmp = get_exploitability(game, average_strategy_profile)
+            start_exp = time.time()
+            exploitability, tmp, MEMO = get_exploitability(
+                game, average_strategy_profile
+            )
             utility_br0_ev1, utility_ev0_br1 = tmp
+            end_exp = time.time()
+            time_exp = end_exp - start_exp
 
             # store average_strategy_profile
             average_strategy_profile_dict[t] = deepcopy(average_strategy_profile)
 
             # time
-            logger.debug(f"{t}, {time_cumu_adj}, {exploitability}")
+            logger.debug(f"{t}, {time_cumu_adj}, {exploitability}, {time_exp=}")
             log_exploitability(
                 [t, time_cumu_adj, exploitability, utility_br0_ev1, utility_ev0_br1]
             )
+
+    # save game tree
+    with open(os.path.join(FOLDER_SAVE, "game_tree_final.pkl"), "wb") as f:
+        pickle.dump(game, f)
 
     # save average_strategy_profile
     with open(os.path.join(FOLDER_SAVE, "average_strategy_profile.pkl"), "wb") as f:

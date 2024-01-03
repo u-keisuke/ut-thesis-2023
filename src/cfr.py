@@ -1,11 +1,8 @@
-import os
-import time
 from copy import copy
 
 import numpy as np
 
 from poker import Node
-from utils import get_logger
 
 
 def update_pi(
@@ -79,6 +76,7 @@ def update_node_values_vanilla(node: Node, strategy_profile: dict):
         node_eu += p * update_node_values_vanilla(child_node, strategy_profile)
     node.eu = node_eu  # node_eu = v_sigma
 
+    # cfrの計算
     node.cv = node.pi_mi * node_eu
     for action, child_node in node.children.items():
         if node.player == 0:
@@ -201,7 +199,9 @@ def get_initial_strategy_profile(node: Node, num_players=None, strategy_profile=
 
 
 def update_strategy(
-    strategy_profile: dict, average_strategy_profile: dict, information_sets: dict
+    strategy_profile: dict,
+    average_strategy_profile: dict,
+    information_sets: dict,
 ):
     for player, information_policy in strategy_profile.items():
         if player == -1:
