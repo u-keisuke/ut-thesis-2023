@@ -35,7 +35,7 @@ def train(num_iter, log_schedule, args):
     with open(os.path.join(FOLDER_SAVE, "strategy_profile_initial.pkl"), "wb") as f:
         pickle.dump(strategy_profile, f)
 
-    time_cumu_adj = 0
+    time_update_cumu = 0
     for t in tqdm(range(num_iter)):
         start_iter = time.time()
 
@@ -53,10 +53,11 @@ def train(num_iter, log_schedule, args):
         )
 
         end_iter = time.time()
-        time_cumu_adj += end_iter - start_iter
+        time_update_cumu += end_iter - start_iter
 
         # log & save
         if log_schedule(t):
+            # calculate exploitability
             start_exp = time.time()
             exploitability, tmp, MEMO = get_exploitability(
                 game, average_strategy_profile
@@ -68,10 +69,12 @@ def train(num_iter, log_schedule, args):
             # store average_strategy_profile
             average_strategy_profile_dict[t] = deepcopy(average_strategy_profile)
 
-            # time
-            logger.debug(f"{t}, {time_cumu_adj}, {exploitability}, {time_exp=}")
+            # logger
+            logger.debug(
+                f"{t=:6d}, {time_update_cumu=:10.4f}, {exploitability=:7.4f}, {time_exp=:7.4f}"
+            )
             log_exploitability(
-                [t, time_cumu_adj, exploitability, utility_br0_ev1, utility_ev0_br1]
+                [t, time_update_cumu, exploitability, utility_br0_ev1, utility_ev0_br1]
             )
 
     # save game tree
