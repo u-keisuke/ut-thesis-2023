@@ -1,6 +1,18 @@
 from copy import copy
 
+import numpy as np
+
 from poker import Node
+
+
+def sample_chance_action(root_node: Node):
+    chance_actions = []
+    node = root_node
+    while not node.terminal:
+        if node.player == -1:
+            chance_actions.append(node.information)
+        node = np.random.choice(list(node.children.values()))
+    return chance_actions
 
 
 def update_pi(
@@ -20,6 +32,10 @@ def update_pi(
         return
 
     for action, child_node in node.children.items():
+        if node.player == -1:
+            if action != node.sampled_action:
+                continue
+
         next_pi_mi_list = copy(pi_mi_list)
         next_pi_i_list = copy(pi_i_list)
         next_true_pi_mi_list = copy(true_pi_mi_list)
@@ -45,56 +61,37 @@ def update_pi(
         )
 
 
-def update_node_values_vanilla(node: Node, strategy_profile: dict):
-    """node.[eu, cv, cfr, pi_i_sum, pi_sigma_sum]が更新される
-    eu: ノードに到達した後得られる期待利得
-    cv: ノードに到達した後得られる期待利得のcounter-factual value
-    cfr: counter-factual regret
-
-    """
+def update_node_values(node: Node, strategy_profile: dict):
     node.num_updates += 1
 
     if node.terminal:
         return node.eu
 
+    if node.player == -1:  # chance player
+        # sample child node
+        sampled_action = np.random.choice(list(node.children.keys()))
+        node.sampled_action = sampled_action
+        child_node = node.children[sampled_action]
+        return update_node_values(child_node, strategy_profile)
+
     node_eu = 0  # ノードに到達した後得られる期待利得
     node.pi_i_sum += node.pi_i
 
     for action, child_node in node.children.items():
-        p = strategy_profile[node.player][node.information][action]  # p = sigma^t(I,a)
+        p = strategy_profile[node.player][node.information][action]
         node.pi_sigma_sum[action] += node.pi_i * p
-        node_eu += p * update_node_values_vanilla(child_node, strategy_profile)
-    node.eu = node_eu  # node_eu = v_sigma
+        node_eu += p * update_node_values(child_node, strategy_profile)
+    node.eu = node_eu
 
-    # cfrの計算
     node.cv = node.pi_mi * node_eu
     for action, child_node in node.children.items():
         if node.player == 0:
-            cfr = node.pi_mi * child_node.eu - node.cv  # child_node.eu = v_(I->a)[a]
-            # or cfr = node.pi_mi * (child_node.eu - node_eu)
+            cfr = node.pi_mi * child_node.eu - node.cv
         else:
             cfr = (-1) * (node.pi_mi * child_node.eu - node.cv)
         node.cfr[action] += cfr
 
     return node_eu
-
-
-def get_initial_strategy_profile(node: Node, num_players=None, strategy_profile=None):
-    if node.terminal:
-        return strategy_profile
-    if strategy_profile is None:
-        strategy_profile = {
-            player: {} for player in range(-1, num_players)
-        }  # chance nodeのために+1する
-    if node.information not in strategy_profile[node.player]:
-        strategy_profile[node.player][node.information] = {
-            action: 1 / len(node.children) for action in node.children
-        }
-    for child in node.children.values():
-        strategy_profile = get_initial_strategy_profile(
-            child, strategy_profile=strategy_profile
-        )
-    return strategy_profile
 
 
 def update_strategy(

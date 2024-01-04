@@ -6,12 +6,9 @@ from copy import deepcopy
 
 from tqdm import tqdm
 
-from cfr import (
-    get_initial_strategy_profile,
-    update_node_values,
-    update_pi,
-    update_strategy,
-)
+import cfr
+import cfr_cs
+from cfr import get_initial_strategy_profile
 from exploitability import get_exploitability
 from poker import KuhnPoker, LeducPoker
 from utils import get_csv_saver, get_logger
@@ -39,18 +36,33 @@ def train(num_iter, log_schedule, args):
     for t in tqdm(range(num_iter)):
         start_iter = time.time()
 
-        update_pi(
-            game.root,
-            strategy_profile,
-            average_strategy_profile,
-            [1.0 for _ in range(game.num_players + 1)],
-            [1.0 for _ in range(game.num_players + 1)],
-            [1.0 for _ in range(game.num_players + 1)],
-        )
-        update_node_values(game.root, strategy_profile, args.sampling)
-        update_strategy(
-            strategy_profile, average_strategy_profile, game.information_sets
-        )
+        if args.sampling == "vanilla":
+            cfr.update_pi(
+                game.root,
+                strategy_profile,
+                average_strategy_profile,
+                [1.0 for _ in range(game.num_players + 1)],
+                [1.0 for _ in range(game.num_players + 1)],
+                [1.0 for _ in range(game.num_players + 1)],
+            )
+            cfr.update_node_values_vanilla(game.root, strategy_profile)
+            cfr.update_strategy(
+                strategy_profile, average_strategy_profile, game.information_sets
+            )
+
+        elif args.sampling == "cs":
+            cfr_cs.update_pi(
+                game.root,
+                strategy_profile,
+                average_strategy_profile,
+                [1.0 for _ in range(game.num_players + 1)],
+                [1.0 for _ in range(game.num_players + 1)],
+                [1.0 for _ in range(game.num_players + 1)],
+            )
+            cfr_cs.update_node_values(game.root, strategy_profile)
+            cfr_cs.update_strategy(
+                strategy_profile, average_strategy_profile, game.information_sets
+            )
 
         end_iter = time.time()
         time_update_cumu += end_iter - start_iter

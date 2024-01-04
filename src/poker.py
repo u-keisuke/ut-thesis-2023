@@ -30,6 +30,8 @@ class Node:
         self.pi_sigma_sum = {}  # numerator of average strategy (sumは全てのiterationについて)
         self.num_updates = 0
 
+        self.sampled_action = None  # for sampling
+
     def expand_child_node(
         self, action, next_player, terminal, utility=0, private_cards=None
     ):
