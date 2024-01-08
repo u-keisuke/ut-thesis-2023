@@ -5,6 +5,9 @@
 .DS_Store
 .vscode
 
+cfr/notebooks
+l2e/notebooks
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
