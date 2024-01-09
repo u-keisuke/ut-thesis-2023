@@ -2,7 +2,7 @@ import copy
 
 import torch
 import torch.optim as optim
-from envs import get_policy_loss
+from play import get_policy_loss
 
 
 def train_base_policy(policy_b, policy_o_list, alpha, beta, n_sample=20):

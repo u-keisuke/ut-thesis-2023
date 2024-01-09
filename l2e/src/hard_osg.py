@@ -1,6 +1,6 @@
 import torch.optim as optim
-from envs import get_policy_loss
 from models import PokerNet
+from play import get_policy_loss
 
 
 def hard_osg(policy_b, n_epochs=20, n_sample=20, alpha=0.1):

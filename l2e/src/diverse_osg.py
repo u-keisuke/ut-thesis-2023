@@ -1,8 +1,9 @@
 import numpy as np
 import torch
 import torch.optim as optim
-from envs import ACTION_SPACE, PokerEnv, get_policy_loss, select_valid_action
+from envs import ACTION_SPACE, PokerEnv
 from models import PokerNet
+from play import get_policy_loss, play_one_game
 from tqdm import tqdm
 
 
@@ -10,7 +11,7 @@ def g(tau: tuple, L: int = 20):
     """eq.(12) function g
     e.g.)
     input: ((5,), ('raise', 'call', '2', 'call', 'raise', 'call'))
-    output: np.array([1, 0, 0, ..., 0, 0, 0])
+    output: np.array([1, 0, 1, ..., 0, 1, 0])
     """
     vec = torch.zeros(L, dtype=torch.float32)
     hand_jqk = tau[0][0] // 2  # (J1,J2,Q1,...,K2)を(J,Q,K)に変換
@@ -37,44 +38,32 @@ def k(tau_1, tau_2, h=1):
     return torch.exp(-numerator / (2 * h))
 
 
-def sample_tau(policy, policy_env):
-    env = PokerEnv(policy_env)
-    state = env.reset()
-    done = False
-    while not done:
-        out = policy(state)
-        action_idx = select_valid_action(
-            out, env._current_node.children.keys()
-        )  # 出力確率に基づいてactionを選択
-        next_state, reward, done, _ = env.step(action_idx)  # terminal以外はreward=0
-        state = next_state
-    return env._info_set
-
-
 def mmd(policy_1, policy_2, policy_env, n_samples=8):
     """eq.(11)"""
-    E_1_list = []
+
+    E_1_list, E_2_list, E_3_list = [], [], []
     for _ in range(n_samples):
-        tau_1, tau_2 = sample_tau(policy_1, policy_env), sample_tau(
-            policy_1, policy_env
+        env = PokerEnv(policy_env)
+        tau_1, tau_2 = (
+            play_one_game(policy_1, env=env)[0],
+            play_one_game(policy_1, env=env)[0],
         )
         E_1_list.append(k(tau_1, tau_2))
-    E_1 = torch.stack(E_1_list).mean()
 
-    E_2_list = []
-    for _ in range(n_samples):
-        tau_1, tau_2 = sample_tau(policy_1, policy_env), sample_tau(
-            policy_2, policy_env
+        tau_1, tau_2 = (
+            play_one_game(policy_1, env=env)[0],
+            play_one_game(policy_2, env=env)[0],
         )
         E_2_list.append(k(tau_1, tau_2))
-    E_2 = torch.stack(E_2_list).mean()
 
-    E_3_list = []
-    for _ in range(n_samples):
-        tau_1, tau_2 = sample_tau(policy_2, policy_env), sample_tau(
-            policy_2, policy_env
+        tau_1, tau_2 = (
+            play_one_game(policy_2, env=env)[0],
+            play_one_game(policy_2, env=env)[0],
         )
         E_3_list.append(k(tau_1, tau_2))
+
+    E_1 = torch.stack(E_1_list).mean()
+    E_2 = torch.stack(E_2_list).mean()
     E_3 = torch.stack(E_3_list).mean()
 
     return E_1 + E_3 - 2 * E_2
@@ -114,8 +103,8 @@ def diverse_osg(policy_b, policy_o_1, n_opponents, n_steps, n_sample, alpha, alp
             # log
             list_loss.append(policy_loss.item())
             # Print running average (学習出来ているかのチェック)
-            # if t % (n_steps // 10) == 0:
-            #    print(f"{t=}, {np.mean(list_loss[-1000:])=}")
+            if t % (n_steps // 10) == 0:
+                print(f"{t=}, {np.mean(list_loss[-1000:])=}")
 
         policy_o_list.append(policy_o_i)
 
