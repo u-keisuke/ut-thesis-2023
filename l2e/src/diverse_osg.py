@@ -14,16 +14,18 @@ def g(tau: tuple, L: int = 20):
     output: np.array([1, 0, 1, ..., 0, 1, 0])
     """
     vec = torch.zeros(L, dtype=torch.float32)
-    hand_jqk = tau[0][0] // 2  # (J1,J2,Q1,...,K2)を(J,Q,K)に変換
     actions = tau[1]  # call, raise, fold, 0~5 (chance nodeのみ)
 
-    vec[hand_jqk] = 1.0
-    for i, a in enumerate(actions):
-        if a in ACTION_SPACE:  # player node
-            idx = 3 + i * 3 + ACTION_SPACE.index(a)
-        elif a in [str(h) for h in range(6)]:  # chance node
-            a_jqk = int(a) // 2
-            idx = 3 + i * 3 + a_jqk
+    round = 0
+    counter = 0
+    for a in actions:
+        if a in ["0", "1", "2", "3", "4", "5"]:  # chance node
+            round += 1
+            counter = 0
+        elif a in ACTION_SPACE:  # player node
+            # round 0の最長は4アクション(call,raise,raise,call)なので12
+            idx = round * 12 + counter * 3 + ACTION_SPACE.index(a)
+            counter += 1
 
         if idx >= L:
             break
@@ -79,7 +81,16 @@ def get_mmd_loss(policy, policy_ref_list, policy_env, n_samples=8):
     return -min_mmd
 
 
-def diverse_osg(policy_b, policy_o_1, n_opponents, n_steps, n_sample, alpha, alpha_mmd):
+def diverse_osg(
+    policy_b,
+    policy_o_1,
+    n_opponents,
+    n_steps,
+    n_sample_policy_loss,
+    n_sample_mmd_loss,
+    alpha,
+    alpha_mmd,
+):
     """Algorithm 3: Diverse-OSG"""
     policy_o_list = [policy_o_1]
     for i in range(n_opponents):
@@ -89,10 +100,13 @@ def diverse_osg(policy_b, policy_o_1, n_opponents, n_steps, n_sample, alpha, alp
         list_loss = []
         for t in tqdm(range(n_steps)):
             policy_loss = get_policy_loss(
-                policy_o_i, policy_env=policy_b, n_sample=n_sample
+                policy_o_i, policy_env=policy_b, n_sample=n_sample_policy_loss
             )
             mmd_loss = get_mmd_loss(
-                policy_o_i, policy_o_list, policy_env=policy_b, n_samples=n_sample
+                policy_o_i,
+                policy_o_list,
+                policy_env=policy_b,
+                n_samples=n_sample_mmd_loss,
             )
             loss = policy_loss + alpha_mmd * mmd_loss
 

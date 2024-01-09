@@ -29,7 +29,8 @@ def main(epochs=50):
             policy_o,
             n_opponents=5,
             n_steps=10000,
-            n_sample=10,
+            n_sample_policy_loss=10,
+            n_sample_mmd_loss=100,
             alpha=alpha,
             alpha_mmd=0.1,
         )
@@ -43,7 +44,7 @@ def main(epochs=50):
         )
 
         print("test")
-        tester.test(copy.deepcopy(policy_b), alpha=alpha)
+        tester.test(copy.deepcopy(policy_b), n_episode=10, n_sample=1000, alpha=alpha)
 
 
 if __name__ == "__main__":

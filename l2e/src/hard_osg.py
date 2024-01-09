@@ -7,7 +7,7 @@ def hard_osg(policy_b, n_epochs=20, n_sample=20, alpha=0.1):
     """Algorithm 2: Hard-OSG"""
     policy_o_hat = PokerNet()
 
-    for i in range(n_epochs):
+    for _ in range(n_epochs):
         # eq.(7)
         policy_b.train()
         policy_o_hat.eval()
