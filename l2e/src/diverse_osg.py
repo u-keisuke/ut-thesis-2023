@@ -34,48 +34,57 @@ def g(tau: tuple, L: int = 20):
     return vec
 
 
-def k(tau_1, tau_2, h=1):
+def k(tau_a, tau_b, h=1):
     """eq.(12)"""
-    numerator = torch.sum((g(tau_1) - g(tau_2)) ** 2)
+    numerator = torch.sum((g(tau_a) - g(tau_b)) ** 2)
     return torch.exp(-numerator / (2 * h))
 
 
-def mmd(policy_1, policy_2, policy_env, n_samples=8):
+def mmd2(policy_1, policy_2, policy_env, n_samples=8):
     """eq.(11)"""
-
-    E_1_list, E_2_list, E_3_list = [], [], []
-    for _ in range(n_samples):
+    mmd2_list = []
+    for _ in range(10):
         env = PokerEnv(policy_env)
-        tau_1, tau_2 = (
-            play_one_game(policy_1, env=env)[0],
-            play_one_game(policy_1, env=env)[0],
-        )
-        E_1_list.append(k(tau_1, tau_2))
+        policy_1_tau_list = [
+            play_one_game(policy_1, env=env)[0] for _ in range(n_samples)
+        ]
+        policy_2_tau_list = [
+            play_one_game(policy_2, env=env)[0] for _ in range(n_samples)
+        ]
 
-        tau_1, tau_2 = (
-            play_one_game(policy_1, env=env)[0],
-            play_one_game(policy_2, env=env)[0],
-        )
-        E_2_list.append(k(tau_1, tau_2))
+        term_1 = torch.stack(
+            [
+                k(tau_a, tau_b)
+                for tau_a in policy_1_tau_list
+                for tau_b in policy_1_tau_list
+            ]
+        ).mean()
+        term_2 = torch.stack(
+            [
+                k(tau_a, tau_b)
+                for tau_a in policy_1_tau_list
+                for tau_b in policy_2_tau_list
+            ]
+        ).mean()
+        term_3 = torch.stack(
+            [
+                k(tau_a, tau_b)
+                for tau_a in policy_2_tau_list
+                for tau_b in policy_2_tau_list
+            ]
+        ).mean()
 
-        tau_1, tau_2 = (
-            play_one_game(policy_2, env=env)[0],
-            play_one_game(policy_2, env=env)[0],
-        )
-        E_3_list.append(k(tau_1, tau_2))
+        mmd2 = term_1 - 2 * term_2 + term_3
+        mmd2_list.append(mmd2)
 
-    E_1 = torch.stack(E_1_list).mean()
-    E_2 = torch.stack(E_2_list).mean()
-    E_3 = torch.stack(E_3_list).mean()
-
-    return E_1 + E_3 - 2 * E_2
+    return torch.stack(mmd2_list).mean()
 
 
 def get_mmd_loss(policy, policy_ref_list, policy_env, n_samples=8):
     """eq.(14) term 1"""
     min_mmd = float("Inf")  # np.inf
     for policy_ref in policy_ref_list:
-        mmd_loss = mmd(policy, policy_ref, policy_env, n_samples=n_samples)
+        mmd_loss = mmd2(policy, policy_ref, policy_env, n_samples=n_samples)
         if mmd_loss < min_mmd:
             min_mmd = mmd_loss
     return -min_mmd
@@ -93,7 +102,7 @@ def diverse_osg(
 ):
     """Algorithm 3: Diverse-OSG"""
     policy_o_list = [policy_o_1]
-    for i in range(n_opponents):
+    for i in range(2, n_opponents):
         policy_o_i = PokerNet()
         optimizer_o_i = optim.Adam(policy_o_i.parameters(), lr=alpha)
 
@@ -118,7 +127,7 @@ def diverse_osg(
             list_loss.append(policy_loss.item())
             # Print running average (学習出来ているかのチェック)
             if t % (n_steps // 10) == 0:
-                print(f"{t=}, {np.mean(list_loss[-1000:])=}")
+                print(f"{t=}, {np.mean(list_loss[-(n_steps//10):])=}")
 
         policy_o_list.append(policy_o_i)
 
