@@ -1,13 +1,14 @@
 import torch.optim as optim
+from loss_policy import get_policy_loss
 from models import PokerNet
-from play import get_policy_loss
+from tqdm import tqdm
 
 
 def hard_osg(policy_b, n_epochs=20, n_sample=20, alpha=0.1):
     """Algorithm 2: Hard-OSG"""
     policy_o_hat = PokerNet()
 
-    for _ in range(n_epochs):
+    for _ in tqdm(range(n_epochs)):
         # eq.(7)
         policy_b.train()
         policy_o_hat.eval()

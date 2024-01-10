@@ -1,4 +1,3 @@
-import torch
 import torch.nn.functional as F
 from envs import PokerEnv
 from utils_l2e import select_valid_action
@@ -28,18 +27,6 @@ def play_one_game(policy, policy_env=None, env=None):
 
         state, reward, finished = env.step(action_idx)  # terminal以外はreward=0
     final_reward = reward
+    trajectory = env._info_set
 
-    return env._info_set, log_prob_list, final_reward
-
-
-def get_policy_loss(policy, policy_env, n_sample):
-    """n_sample回ゲームをランダムにプレイして、その平均のpolicy_lossを返す"""
-    policy_loss_list = []
-    for _ in range(n_sample):
-        _, log_prob_list, reward = play_one_game(policy, policy_env=policy_env)
-        policy_loss = -(torch.stack(log_prob_list) * reward).mean()
-        policy_loss_list.append(policy_loss)
-
-    E_policy_loss = torch.stack(policy_loss_list).mean()
-
-    return E_policy_loss
+    return trajectory, log_prob_list, final_reward

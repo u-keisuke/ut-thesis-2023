@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -8,8 +7,6 @@ def select_valid_action(out, valid_actions_str: list, action_space: list):
 
     out_valid = out[:, valid_actions_idx]
     actions_prob = F.softmax(out_valid, dim=1)
-
-    # selected_action = np.random.choice(valid_actions_idx, p=actions_prob.reshape(-1))
 
     # torch.multinomialを使って、確率に基づいてアクションをサンプリング
     selected_action_idx = torch.multinomial(actions_prob, num_samples=1)

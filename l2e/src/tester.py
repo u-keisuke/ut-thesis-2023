@@ -2,8 +2,8 @@ import copy
 
 import numpy as np
 import torch.optim as optim
+from loss_policy import get_policy_loss
 from models import PokerNet
-from play import get_policy_loss
 
 
 class tester_random:

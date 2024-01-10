@@ -8,7 +8,7 @@ from models import PokerNet
 from tester import tester_random
 
 
-def main(epochs=50):
+def main(epochs=300):
     alpha = 0.1
     beta = 0.01
     policy_b = PokerNet()  # B
@@ -21,30 +21,33 @@ def main(epochs=50):
         print(f"{e=}")
 
         print("hard_osg")
-        policy_o = hard_osg(policy_b, n_epochs=20, n_sample=20, alpha=alpha)
+        policy_o = hard_osg(
+            copy.deepcopy(policy_b), n_epochs=20, n_sample=20, alpha=alpha
+        )  # n_sample=20
 
         print("diverse_osg")
         policy_o_list += diverse_osg(
-            policy_b,
+            copy.deepcopy(policy_b),
             policy_o,
             n_opponents=5,
             n_steps=10000,
             n_sample_policy_loss=10,
             n_sample_mmd_loss=100,
             alpha=alpha,
-            alpha_mmd=0.1,
+            alpha_mmd=0.8,
         )
 
-        print("train_base_policy")
         policy_o_list_sampled = np.random.choice(
             policy_o_list, size=min(40, len(policy_o_list))
         )
+
+        print("train_base_policy")
         policy_b = train_base_policy(
             policy_b, policy_o_list_sampled, alpha=alpha, beta=beta, n_sample=20
         )
 
         print("test")
-        tester.test(copy.deepcopy(policy_b), n_episode=10, n_sample=1000, alpha=alpha)
+        tester.test(copy.deepcopy(policy_b), n_episode=10, n_sample=10, alpha=alpha)
 
 
 if __name__ == "__main__":
