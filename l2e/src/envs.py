@@ -45,17 +45,21 @@ class PokerEnv:
     def start(self):
         """ゲームを初期化する．ただしハンドや先手後手は変えない．"""
         self._current_node = GAME.root.children[self._hands_players_str]
-        self._info_set = ((int(self._hands_players[self._player]),), ())
+        self.info_set = ((int(self._hands_players[self._player]),), ())
+        self._info_set_opponent = (
+            (int(self._hands_players[self._player_opponent]),),
+            (),
+        )
         self._num_round = 0
         self.step_env()
 
-    def output_state(self):
+    def transform_infoset_to_vec(self, info_set):
         """info_setをone-hot vector (torch.tensor)に変換する
         input: info_set
         output: one-hot vector (torch.tensor)
         """
         vec = np.zeros(NUM_INPUTS)
-        vec[INFOSET_LIST.index(self._info_set)] = 1
+        vec[INFOSET_LIST.index(info_set)] = 1
         vec = torch.from_numpy(vec).float().unsqueeze(0)
         return vec
 
@@ -63,8 +67,7 @@ class PokerEnv:
         self.step_player(action_idx)
         self.step_env()
         return (
-            self.output_state() if not self._current_node.terminal else None,
-            self._current_node.eu,
+            self._current_node.eu * ((-1) ** self._player),
             self._current_node.terminal,
         )
 
@@ -75,7 +78,11 @@ class PokerEnv:
         """
         action_str = self.action_space[action_idx]
         self._current_node = self._current_node.children[action_str]
-        self._info_set = (self._info_set[0], self._info_set[1] + (action_str,))
+        self.info_set = (self.info_set[0], self.info_set[1] + (action_str,))
+        self._info_set_opponent = (
+            self._info_set_opponent[0],
+            self._info_set_opponent[1] + (action_str,),
+        )
 
     def step_env(self):
         """player以外の行動を決定する"""
@@ -87,7 +94,7 @@ class PokerEnv:
                 action_str = self._hand_chance
                 self._num_round += 1
             elif self._current_node.player == self._player_opponent:
-                input_data = self.output_state()
+                input_data = self.transform_infoset_to_vec(self._info_set_opponent)
                 out = self._opponent_policy(input_data)  # call, raise, fold
                 probs = F.softmax(out, dim=1)
                 action = select_valid_action(
@@ -100,4 +107,8 @@ class PokerEnv:
                 )
 
             self._current_node = self._current_node.children[action_str]
-            self._info_set = (self._info_set[0], self._info_set[1] + (action_str,))
+            self.info_set = (self.info_set[0], self.info_set[1] + (action_str,))
+            self._info_set_opponent = (
+                self._info_set_opponent[0],
+                self._info_set_opponent[1] + (action_str,),
+            )

@@ -1,11 +1,12 @@
 import copy
+import pickle
 
 import numpy as np
+from adapter import AdapterRandom
 from base_policy_training import train_base_policy
 from diverse_osg import diverse_osg
 from hard_osg import hard_osg
 from models import PokerNet
-from tester import tester_random
 
 
 def main(epochs=300):
@@ -15,7 +16,10 @@ def main(epochs=300):
     policy_o = PokerNet()  # O
     policy_o_list = [policy_o]
 
-    tester = tester_random()
+    adapter = AdapterRandom(
+        n_episode=10,
+        n_sample=10,
+    )
 
     for e in range(epochs):
         print(f"{e=}")
@@ -30,9 +34,8 @@ def main(epochs=300):
             copy.deepcopy(policy_b),
             policy_o,
             n_opponents=5,
-            n_steps=10000,
-            n_sample_policy_loss=10,
-            n_sample_mmd_loss=100,
+            n_step=500,
+            n_sample=10,
             alpha=alpha,
             alpha_mmd=0.8,
         )
@@ -46,8 +49,12 @@ def main(epochs=300):
             policy_b, policy_o_list_sampled, alpha=alpha, beta=beta, n_sample=20
         )
 
-        print("test")
-        tester.test(copy.deepcopy(policy_b), n_episode=10, n_sample=10, alpha=alpha)
+        print("test - adapt to random policy")
+        adapter.adapt(copy.deepcopy(policy_b), optimizer_type="Adam", alpha=0.01)
+
+        # save policy_o_list
+        with open(f"policy_o_list_{e:04}.pickle", "wb") as f:
+            pickle.dump(policy_o_list, f)
 
 
 if __name__ == "__main__":

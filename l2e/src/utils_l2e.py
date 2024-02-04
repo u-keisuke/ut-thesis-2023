@@ -15,3 +15,7 @@ def select_valid_action(out, valid_actions_str: list, action_space: list):
     selected_action = valid_actions_idx[selected_action_idx.item()]
 
     return selected_action
+
+
+def transform_policy_dict_to_pokernet(strategy_profile, INFOSET_LIST_ORDER):
+    """CFRで学習された辞書形式のstrategy_profileをPokerNetに変換する"""

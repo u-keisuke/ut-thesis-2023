@@ -1,3 +1,5 @@
+import copy
+
 import torch
 from envs import ACTION_SPACE, PokerEnv
 from play import play_one_game
@@ -8,14 +10,16 @@ def get_policy_mmd_loss(policy_j, policy_i, policy_env, n_sample, alpha_mmd=0.8)
     i, jはL2Eの論文と同じ: jが学習中のpolicy, iが参照policy
     """
     if type(policy_i) is list:
-        policy_i_list = policy_i
-
+        policy_i_list = copy.deepcopy(policy_i)
         mmd_min = float("Inf")  # np.inf
         for p in policy_i_list:
-            mmd_i_j = mmd2(policy_j, p, policy_env, n_samples=n_sample)
+            mmd_i_j = mmd2(policy_j, p, policy_env, n_sample=n_sample)
             if mmd_i_j < mmd_min:
                 mmd_min = mmd_i_j
                 policy_i = p
+    else:
+        mmd_i_j = mmd2(policy_j, policy_i, policy_env, n_sample=n_sample)
+        mmd_min = mmd_i_j
 
     loss_list = []
     for _ in range(10):
@@ -37,7 +41,7 @@ def get_policy_mmd_loss(policy_j, policy_i, policy_env, n_sample, alpha_mmd=0.8)
             loss = -(torch.stack(log_probs_1) * (reward_1 + reward_mmd)).mean()
             loss_list.append(loss)
 
-    return torch.stack(loss_list).mean()
+    return torch.stack(loss_list).mean(), mmd_min
 
 
 def mmd2(policy_j, policy_i, policy_env, n_sample):
